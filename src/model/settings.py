@@ -9,6 +9,9 @@ class NumericalSettings:
 
     Parameters
     ----------
+    f:
+        Operating frequency in gigahertz.
+
     Nc:
         Number of RF cavities or RF interaction structures.
 
@@ -35,6 +38,7 @@ class NumericalSettings:
         with the previous iteration values.
     """
 
+    f: float
     Nc: int
     Ns: int
     Nz: int
