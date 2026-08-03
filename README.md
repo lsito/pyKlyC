@@ -3,7 +3,8 @@ Python computation tool for 1/1.5D klystron simulations.
 
 At the moment, the idea would be:
 
-pyklyc/
+```
+pyklyc/src
   constants.py
   units.py
 
@@ -38,9 +39,11 @@ pyklyc/
     modulation.py
     phase_space.py
     power_balance.py
+    convergence.py
 
   tests/
     test_reference_cases.py
+```
 
 ## 1. We start with a 1D klystron code with Gaussian cavity fields.
 We mean no GUI, no EM solver, no Optimizer, no CGUN, no magnetostatic solver.
@@ -117,5 +120,5 @@ We need first to understand how we want to build the datamodels.
 | MATLAB parameter | Meaning                                                                                                          |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `figuredisp`     | `'on'` or `'off'`; controls static plots.                                                                        |
-| `moviedisp`      | Vector of flags controlling GIFs, power ramp, trajectory saving, and convergence display.                        |
+| `moviedisp`      | Vector of flags controlling GIFs, power ramp, trajectory saving, and convergence display. Eg. [0 0 0 0 1] display convergence history.                       |
 | `GIFpara`        | Plot/animation parameters: number of plotted trajectories, min/max velocity axis, z-cut, end cut, velocity type. |
