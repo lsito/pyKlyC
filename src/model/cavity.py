@@ -1,12 +1,5 @@
 from dataclasses import dataclass
 import numpy as np
-import numpy.typing as npt
-
-
-FloatArray = npt.NDArray[np.float64]
-ComplexArray = npt.NDArray[np.complex128]
-IntArray = npt.NDArray[np.int64]
-
 
 @dataclass(frozen=True)
 class CavityParameters:
@@ -50,16 +43,16 @@ class CavityParameters:
         Complex or real coupling matrix between cavity modes.
     """
 
-    type: IntArray
-    nh: IntArray
-    f0: FloatArray
-    Qext: FloatArray
-    Qin: FloatArray
-    zshift: FloatArray
-    Pin: FloatArray
-    gaman: ComplexArray
-    cavityname: tuple[str, ...]
-    kai: npt.NDArray[np.complex128]
+    type: int
+    nh: int
+    f0: float
+    Qext: float
+    Qin: float
+    zshift: np.ndarray
+    Pin: float
+    gaman: float
+    cavityname: str
+    kai: np.ndarray
 
     def validate(self, Nc: int) -> None:
         """

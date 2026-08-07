@@ -51,7 +51,6 @@ The idea is to start porting:
     - KLJCmainsv22.m --> 1D solver
     - Klyc_v6.mlapp --> GUI and IO mapping (we focus on the IO mapping)
 
-
 ### KLJCmainsv22.m inputs:
 We need first to understand how we want to build the datamodels.
 
@@ -124,4 +123,9 @@ We need first to understand how we want to build the datamodels.
 
 
 
-
+### KLJmainsv22.m reference parameter calculations:
+| MATLAB parameter  | Meaning                                                                                                                                             |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Iz0`          | Signed average emission current, in amperes. Given by the average in the RF period of the sum of the emission current(Izt) associated with all (Nt) emitted samples. $$I_{z0}= \frac{1}{N_t} \sum_{j \in Y_0} I_{zt,j}$$  |
+|`I0`| $$I_0 = \|I_{z0}\|$$ |
+|`U0`|  Current-weighted average emission voltage, in kilovolts. $$U_0 = \frac{\sum_{j \in Y_0} I_{zt,j} U_{t,j}}{I_{z0}} $$ |
