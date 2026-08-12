@@ -38,3 +38,12 @@ eta0: float = 4.0e-7 * np.pi * c
 # Zero of the zeroth-order Bessel function, J0
 mu01: float = 2.40483
 # Higher-precision Python version: mu01 = float(jn_zeros(0, 1)[0])
+
+mu0: np.ndarray = np.array([
+    2.40483,
+    5.52008,
+    8.65373,
+    11.79153,
+    14.93092,
+])
+# Higher-precision Python version: mu0 = jn_zeros(0, 5)

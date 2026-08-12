@@ -1,5 +1,11 @@
 from dataclasses import dataclass
 import numpy as np
+import numpy.typing as npt
+
+
+FloatArray = npt.NDArray[np.float64]
+ComplexArray = npt.NDArray[np.complex128]
+IntArray = npt.NDArray[np.int64]
 
 @dataclass(frozen=True)
 class CavityParameters:
@@ -43,16 +49,22 @@ class CavityParameters:
         Complex or real coupling matrix between cavity modes.
     """
 
-    type: int
-    nh: int
-    f0: float
-    Qext: float
-    Qin: float
-    zshift: np.ndarray
-    Pin: float
-    gaman: float
+    type: IntArray
+    nh: IntArray
+    f0: FloatArray
+    Qext: FloatArray
+    Qin: FloatArray
+    zshift: FloatArray
+    Pin: FloatArray
+    gaman: ComplexArray
     cavityname: str
-    kai: np.ndarray
+    kai: ComplexArray
+
+    @property
+    def names(self) -> tuple[str, ...]:
+        """Return the space-separated MATLAB field-map names."""
+
+        return tuple(self.cavityname.split())
 
     def validate(self, Nc: int) -> None:
         """
@@ -74,7 +86,7 @@ class CavityParameters:
                     f"{name} must have shape ({Nc},); received {value.shape}."
                 )
 
-        if len(self.cavityname) != Nc:
+        if len(self.names) != Nc:
             raise ValueError(f"cavityname must contain {Nc} names.")
 
         if self.kai.shape != (Nc, Nc):
