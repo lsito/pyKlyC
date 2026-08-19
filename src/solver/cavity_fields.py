@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from pathlib import Path
 import warnings
 
 import numpy as np
@@ -7,6 +6,7 @@ from scipy.interpolate import interp1d
 
 from constants import eta0
 from model.cavity import CavityParameters
+from model.cavity_field_map import CavityFieldMap
 from model.settings import NumericalSettings
 from solver.grid import GridParameters
 from solver.reference import ReferenceParameters
@@ -28,7 +28,7 @@ class CavityFields:
         cavities: CavityParameters,
         grid: GridParameters,
         reference: ReferenceParameters,
-        field_map_directory: str | Path = ".",
+        field_maps: dict[str, CavityFieldMap],
     ) -> "CavityFields":
       
         cavities.validate(numerical.Nc)
@@ -39,12 +39,10 @@ class CavityFields:
         vpz = np.zeros(shape)
         alfaz = np.zeros(shape)
 
-        field_map_directory = Path(field_map_directory)
-
-        # Check that for the specific cavity we are looking at, the field
-        # harmonic number is less than or equal to the number of harmonics used 
-        # in the simulation settings.
         for k, name in enumerate(cavities.names):
+            # Check that for the specific cavity we are looking at, the field
+            # harmonic number is less than or equal to the number of harmonics used 
+            # in the simulation settings.
             if cavities.nh[k] > numerical.Ns:
                 continue
 
@@ -53,22 +51,13 @@ class CavityFields:
                 raise NotImplementedError(
                     "The traveling-wave field branch is empty."
                 )
-
-            # Importing the field map made as a 2d array: first column is the
-            # longitudinal position and the second column is the longitudinal 
-            # electric field values.
-            field_map_path = field_map_directory / f"{name}.txt"
-            field_map = np.atleast_2d(np.loadtxt(field_map_path))
-
-            if field_map.shape[1] != 2:
-                raise ValueError(
-                    f"Field map {field_map_path} must contain two columns."
-                )
+            
+            field_map = field_maps[name]
 
             # Placing the cavities in the correct position along the 
             # longitudinal grid
-            positions = field_map[:, 0] + cavities.zshift[k]
-            field_values = field_map[:, 1]
+            positions = field_map.z_mm + cavities.zshift[k]
+            field_values = field_map.e_z
 
             if (
                 np.min(positions) <= grid.zi[0] + grid.dz / 10.0
