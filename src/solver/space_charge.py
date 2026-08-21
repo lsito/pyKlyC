@@ -19,9 +19,11 @@ class SpaceChargeState:
     gamazp: np.ndarray
     QQfill: np.ndarray
     Esz00: np.ndarray
+    Eszr: np.ndarray
     Esztotal: np.ndarray
     Esz0: np.ndarray
     Esz: np.ndarray
+    SCmethod: int
 
     @classmethod
     def calculate(
@@ -44,6 +46,7 @@ class SpaceChargeState:
             fillfactor,
             DCSPfactor,
         )
+        Eszr = cls.calculate_Eszr(beam, grid)
 
         return cls(
             wp=wp,
@@ -51,10 +54,32 @@ class SpaceChargeState:
             gamazp=gamazp,
             QQfill=QQfill,
             Esz00=Esz00,
+            Eszr=Eszr,
             Esztotal=np.zeros_like(Esz00),
             Esz0=np.zeros(len(grid.z), dtype=complex),
             Esz=np.zeros_like(beam_state.QQ),
+            SCmethod=0,
         )
+
+    @staticmethod
+    def calculate_Eszr(
+        beam: BeamParameters,
+        grid: GridParameters,
+    ) -> np.ndarray:
+        roots = mu0.reshape(1, -1)
+        rcvs = grid.rcvs.reshape(-1, 1)
+
+        Eszr = (
+            2.0
+            / roots
+            * (
+                beam.rm2 * j1(roots * beam.rm2 / rcvs)
+                - beam.rm1 * j1(roots * beam.rm1 / rcvs)
+            )
+            / j1(roots)
+        ) ** 2
+
+        return Eszr
 
     @staticmethod
     def calculate_plasma_frequency(
