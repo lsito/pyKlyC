@@ -101,6 +101,43 @@ class SpaceChargeState:
 
         return wp
 
+    def update_local(
+        self,
+        beam: BeamParameters,
+        grid: GridParameters,
+        reference: ReferenceParameters,
+        beam_state: BeamState,
+    ):
+        harmonics = np.arange(1, beam_state.Iz.shape[1] + 1)
+
+        modal_denominator = 1.0 + (
+            mu0[np.newaxis, np.newaxis, :]
+            / harmonics[np.newaxis, :, np.newaxis]
+            / beam.rc
+            / grid.betae
+            * beam_state.vez[:, np.newaxis, np.newaxis]
+            * beam_state.gamaz[:, np.newaxis, np.newaxis]
+        ) ** 2
+
+        cylindrical_modes = np.sum(
+            self.Eszr[:, np.newaxis, :] / modal_denominator,
+            axis=2,
+        )
+
+        self.Esz[:] = (
+            -esign
+            * 1.0j
+            * beam_state.Iz
+            / harmonics
+            * self.wp**2
+            / grid.w**2
+            * (reference.gama + 1.0)
+            / reference.gama**2
+            / (beam.rm2**2 - beam.rm1**2)
+            * cylindrical_modes
+        )
+        self.Esz0.fill(0.0)
+
     @staticmethod
     def calculate_prefill_space_charge(
         beam: BeamParameters,
