@@ -26,7 +26,7 @@ class SpaceChargeState:
     SCmethod: int
 
     @classmethod
-    def calculate(
+    def initialize(
         cls,
         beam: BeamParameters,
         grid: GridParameters,
@@ -36,6 +36,7 @@ class SpaceChargeState:
         fillfactor: float,
         DCSPfactor: float,
     ) -> "SpaceChargeState":
+        """Compute the fixed prefill and geometry terms, and initialize the state."""
         wp = cls.calculate_plasma_frequency(beam, reference, factor)
         Esz00, zp, gamazp, QQfill = cls.calculate_prefill_space_charge(
             beam,
@@ -101,6 +102,40 @@ class SpaceChargeState:
 
         return wp
 
+    def update(
+        self,
+        nn,
+        beam,
+        grid,
+        reference,
+        beam_state,
+        fillfactor,
+        DCSPfactor,
+    ):
+        self.Esztotal.fill(0.0)
+        self.Esz.fill(0.0)
+        self.Esz0.fill(0.0)
+
+        if nn == 1 or self.wp == 0.0:
+            return
+
+        if self.SCmethod == 0:
+            self.update_local(
+                beam,
+                grid,
+                reference,
+                beam_state,
+            )
+        else:
+            self.update_global(
+                beam,
+                grid,
+                reference,
+                beam_state,
+                fillfactor,
+                DCSPfactor,
+            )
+
     def update_local(
         self,
         beam: BeamParameters,
@@ -137,6 +172,89 @@ class SpaceChargeState:
             * cylindrical_modes
         )
         self.Esz0.fill(0.0)
+
+    def update_global(
+        self,
+        beam,
+        grid,
+        reference,
+        beam_state,
+        fillfactor,
+        DCSPfactor,
+    ):
+        Ns = beam_state.QQ.shape[1]
+
+        QQtotal = np.column_stack(
+            (beam_state.QQDC, beam_state.QQ)
+        )
+
+        gamma = np.ones(QQtotal.shape)
+        gamma[:, 1:] = beam_state.gamaz.reshape(-1, 1)
+
+        space_charge_factor = (
+            self.wp**2
+            / grid.w**2
+            * (reference.gama + 1.0)
+            / reference.gama**2
+        )
+
+        beam_area = beam.rm2**2 - beam.rm1**2
+
+        for k in range(len(grid.z)):
+            start, stop = grid.Nesz[k]
+
+            source_z = grid.z[start:stop]
+            source_radius = grid.rcvs[start:stop]
+
+            distance = np.abs(source_z - grid.z[k])
+            direction = np.sign(grid.z[k] - source_z)
+
+            cylindrical_modes = np.zeros(
+                (len(source_z), Ns + 1)
+            )
+
+            for p, root in enumerate(mu0):
+                radial_coupling = (
+                    self.Eszr[start:stop, p]
+                    / beam_area
+                )
+
+                exponential = np.exp(
+                    -root
+                    * gamma[start:stop]
+                    * distance.reshape(-1, 1)
+                    / grid.betae
+                    / source_radius.reshape(-1, 1)
+                )
+
+                cylindrical_modes += (
+                    radial_coupling.reshape(-1, 1)
+                    * exponential
+                )
+
+            self.Esztotal[k] = (
+                esign
+                * grid.dz
+                * grid.betae
+                * np.sum(
+                    -QQtotal[start:stop]
+                    * direction.reshape(-1, 1)
+                    / 2.0
+                    * space_charge_factor
+                    * cylindrical_modes,
+                    axis=0,
+                )
+            )
+
+        self.Esz[:] = (
+            self.Esztotal[:, 1:]
+            + fillfactor * self.Esz00[:, 1:]
+        )
+
+        self.Esz0[:] = DCSPfactor * (
+            self.Esztotal[:, 0]
+            + fillfactor * self.Esz00[:, 0]
+        )
 
     @staticmethod
     def calculate_prefill_space_charge(

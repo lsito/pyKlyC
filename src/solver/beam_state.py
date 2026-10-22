@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
 import numpy as np
-import numpy.typing as npt
 
 from model.beam import BeamParameters
 from model.settings import NumericalSettings
@@ -21,7 +20,7 @@ class BeamState:
     gamaz: np.ndarray
 
     @classmethod
-    def calculate(
+    def initialize(
         cls,
         numerical: NumericalSettings,
         beam: BeamParameters,

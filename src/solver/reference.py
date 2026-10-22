@@ -1,12 +1,8 @@
 from dataclasses import dataclass
 import numpy as np
-import numpy.typing as npt
 
 from constants import c, etom
 from model.beam import BeamParameters
-
-
-FloatArray = npt.NDArray[np.float64]
 
 
 @dataclass(frozen=True)

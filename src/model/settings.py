@@ -36,6 +36,16 @@ class NumericalSettings:
     iterfactor:
         Relaxation factor used to mix the newly computed beam harmonics
         with the previous iteration values.
+
+    evolutionmethod:
+        Two numerical controls, in the same order as MATLAB's vector.
+        [0] limits the relative increase in inverse velocity Vnz over one
+        spatial step. Exceeding it requests continuation by time tracking.
+        [1] is the cavity-voltage residual threshold used by the outer
+        iteration to switch from local to global space charge; if it is
+        no greater than Rlimit, MATLAB can instead finish in local mode.
+        The ordinary GUI setting is np.array([0.005, 2.0]): a 0.5% inverse-
+        velocity increase threshold and a residual threshold of 2.0.
     """
 
     f: float
@@ -46,6 +56,7 @@ class NumericalSettings:
     Ntimes: int
     Rlimit: float
     iterfactor: float
+    evolutionmethod: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -62,7 +73,10 @@ class DisplaySettings:
         Vector of runtime display and movie-generation flags.
 
     GIFpara:
-        Parameters used when generating animated output.
+        Parameters used when generating animated output. MATLAB also uses
+        GIFpara[3] as an upstream discard distance in mm during time tracking:
+        a backward crossing below min(grid.zi) + GIFpara[3] ends that electron's
+        trajectory. It is therefore not solely a display control.
 
     Npin:
         Number of input-power sweep points when the power-ramp mode is active.

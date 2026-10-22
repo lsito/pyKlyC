@@ -1,11 +1,5 @@
 from dataclasses import dataclass
 import numpy as np
-import numpy.typing as npt
-
-
-FloatArray = npt.NDArray[np.float64]
-ComplexArray = npt.NDArray[np.complex128]
-IntArray = npt.NDArray[np.int64]
 
 @dataclass(frozen=True)
 class CavityParameters:
@@ -42,6 +36,10 @@ class CavityParameters:
     gaman:
         Complex reflection coefficient assigned to each output structure.
 
+    Lsb:
+        Electrical phase length beta0 * Ls of each cavity-port connection,
+        in radians. The MATLAB initialization uses pi for every cavity.
+
     cavityname:
         Field-map base names, one for each structure.
 
@@ -49,16 +47,17 @@ class CavityParameters:
         Complex or real coupling matrix between cavity modes.
     """
 
-    type: IntArray
-    nh: IntArray
-    f0: FloatArray
-    Qext: FloatArray
-    Qin: FloatArray
-    zshift: FloatArray
-    Pin: FloatArray
-    gaman: ComplexArray
+    type: np.ndarray
+    nh: np.ndarray
+    f0: np.ndarray
+    Qext: np.ndarray
+    Qin: np.ndarray
+    zshift: np.ndarray
+    Pin: np.ndarray
+    gaman: np.ndarray
+    Lsb: np.ndarray
     cavityname: str
-    kai: ComplexArray
+    kai: np.ndarray
 
     @property
     def names(self) -> tuple[str, ...]:
@@ -80,6 +79,7 @@ class CavityParameters:
             ("zshift", self.zshift),
             ("Pin", self.Pin),
             ("gaman", self.gaman),
+            ("Lsb", self.Lsb),
         ):
             if value.shape != (Nc,):
                 raise ValueError(

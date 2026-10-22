@@ -1,10 +1,5 @@
 from dataclasses import dataclass
 import numpy as np
-import numpy.typing as npt
-
-
-FloatArray = npt.NDArray[np.float64]
-IntArray = npt.NDArray[np.int64]
 
 
 @dataclass(frozen=True)
@@ -71,11 +66,11 @@ class BeamParameters:
     xd: float
     yd: float
     Nt: int
-    t0: FloatArray
-    Ut: FloatArray
-    Izt: FloatArray
-    tn1: FloatArray
-    Y0: IntArray
+    t0: np.ndarray
+    Ut: np.ndarray
+    Izt: np.ndarray
+    tn1: np.ndarray
+    Y0: np.ndarray
 
     def __post_init__(self) -> None:
         expected_shape = (self.Nt,)

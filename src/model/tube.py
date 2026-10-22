@@ -1,9 +1,5 @@
 from dataclasses import dataclass
 import numpy as np
-import numpy.typing as npt
-
-
-FloatArray = npt.NDArray[np.float64]
 
 
 @dataclass(frozen=True)
@@ -27,7 +23,7 @@ class TubeParameters:
 
     z0: float
     L: float
-    rcv: FloatArray
+    rcv: np.ndarray
 
     def __post_init__(self) -> None:
         if self.L <= 0.0:

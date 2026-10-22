@@ -100,6 +100,7 @@ We need first to understand how we want to build the datamodels.
 | `Nlimit`         | Maximum number of nonlinear iterations.                                                               |
 | `Ntimes`         | Extra trajectory-storage/evolution factor. The arrays `Zn`, `Vn`, `Tn` have length `Ntimes * len(z)`. |
 | `Rlimit`         | Convergence tolerance for cavity voltage residual.                                                    |
+| `evolutionmethod` | Two-element array in `NumericalSettings`: `[0]` limits the relative increase in inverse velocity per spatial step; `[1]` controls the local/global space-charge transition and local-mode convergence. MATLAB's ordinary GUI setting is `[0.005, 2.0]`. |
 | `f`              | Operating frequency, GHz.                                                                                                                       |
 | `mono`           | Mode flag. `1` is normal klystron simulation; `0` activates monotron-frequency logic.                                                           |
 
@@ -119,7 +120,6 @@ We need first to understand how we want to build the datamodels.
 | `fillfactor`      | Adds pre-filled upstream DC beam contribution to space charge.                                                                                      |
 | `DCSPfactor`      | Scales DC space-charge component.                                                                                                                   |
 | `iterfactor`      | Iteration relaxation coefficient for updating `Iz`, `QQ`, `IzDC`, `QQDC`.                                                                           |
-| `evolutionmethod` | Two-element control vector. First element limits step-size change in fast pass; second controls switching from local to global space-charge method. |
 
 
 

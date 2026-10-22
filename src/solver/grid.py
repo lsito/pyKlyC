@@ -18,7 +18,6 @@ class GridParameters:
     w: float
     w0: np.ndarray
     k0: np.ndarray
-    Lsb: np.ndarray
     betae: float
     dz: float
     zi: np.ndarray
@@ -43,7 +42,6 @@ class GridParameters:
         w = 2.0 * np.pi * numerical.f * 1.0e9
         w0 = 2.0 * np.pi * cavities.f0 * 1.0e9
         k0 = w0 / c / 1.0e3
-        Lsb = np.pi * np.ones(numerical.Nc)
 
         betae = w / c / reference.s / 1.0e3
         initial_dz = 2.0 * np.pi / betae / numerical.Nz
@@ -88,7 +86,6 @@ class GridParameters:
             w=w,
             w0=w0,
             k0=k0,
-            Lsb=Lsb,
             betae=betae,
             dz=dz,
             zi=zi,

@@ -26,13 +26,14 @@ class CavityState:
     B: np.ndarray
 
     @classmethod
-    def calculate(
+    def initialize(
         cls,
         numerical: NumericalSettings,
         cavities: CavityParameters,
         beam: BeamParameters,
         reference: ReferenceParameters,
     ) -> "CavityState":
+        """Initialize the input excitation and allocate the circuit arrays."""
         Pinflag = np.sign(cavities.Pin)
         Pin = np.abs(cavities.Pin)
 
@@ -68,7 +69,7 @@ class CavityState:
             B=np.zeros(2 * numerical.Nc, dtype=complex),
         )
 
-    def calculate_Mc_B(
+    def assemble_Mc_B(
         self,
         numerical: NumericalSettings,
         cavities: CavityParameters,
@@ -118,8 +119,8 @@ class CavityState:
                         -1.0j * cavities.kai[k, j]
                     )
 
-            exp_positive = np.exp(1.0j * grid.Lsb[k])
-            exp_negative = np.exp(-1.0j * grid.Lsb[k])
+            exp_positive = np.exp(1.0j * cavities.Lsb[k])
+            exp_negative = np.exp(-1.0j * cavities.Lsb[k])
             sqrt_Qext = np.sqrt(cavities.Qext[k])
             drive = self.Vin[k] * drivefactor
 
@@ -156,7 +157,7 @@ class CavityState:
 
         return self.Mc, self.B
 
-    def update(
+    def solve(
         self,
         numerical: NumericalSettings,
         cavities: CavityParameters,
@@ -168,7 +169,7 @@ class CavityState:
     ):
         self.flagVnc[:] = self.Vnc
 
-        self.calculate_Mc_B(
+        self.assemble_Mc_B(
             numerical,
             cavities,
             cavity_fields,
