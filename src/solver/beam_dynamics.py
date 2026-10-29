@@ -225,6 +225,96 @@ class BeamDynamics:
             QQr=QQr,
         )
 
+    def track(
+        self,
+        numerical,
+        beam,
+        grid,
+        reference,
+        *,
+        Esz,
+        Esz0,
+        Emz,
+        Emz0,
+        nn=1,
+        Iz=None,
+    ):
+        """Run one beam pass in prescribed fields and reconstruct its charge.
+
+        Call on a freshly initialized BeamDynamics. The spatial march is the
+        fast forward-only stage. If strong deceleration requests a switch,
+        continue in time on THIS object's existing trajectories and sums;
+        reinitializing would erase the beam contributions already recorded.
+
+        Supply separate RF and DC space-charge fields (Esz, Esz0) and cavity
+        fields (Emz, Emz0). All are read-only inputs normalized by betae*U0.
+        RF arrays have shape (len(grid.z), Ns); DC arrays have shape (len(grid.z),).
+        This method assembles Esmz = Esz + Emz and Esmz0 = Esz0 + Emz0 once.
+        The spatial and time trackers share these working totals. Only the
+        optional spatial correction subsequently changes selected RF rows.
+        Iz is the PREVIOUS iteration's current harmonics, needed for the
+        optional space-charge correction. nn starts at 1 as in MATLAB.
+        MATLAB separates the sign of iterfactor (the correction control) from
+        its magnitude (the relaxation weight used later by BeamState.update).
+
+        After either tracking route, reconstruct QQr from the spatial current
+        gradient using charge continuity. This does not update BeamState or
+        solve new fields: the outer iteration must call BeamState.update next.
+
+        Returns (Esmz, Esmz0) for diagnostics and updates this object in place.
+        The returned RF total includes any rowwise tracking correction.
+        Like MATLAB, charge
+        reconstruction also runs when time tracking ends through upstream
+        loss, discard or exhausted storage. Finishing this method does not
+        imply that every electron exited downstream: inspect Yflag and the
+        histories. It does not imply nonlinear convergence either.
+        """
+
+        # Assemble the complete fields once, including planes beyond a possible
+        # handoff. Array addition creates independent buffers: source fields
+        # must not be overwritten by the optional RF correction in track_z.
+        Esmz = Esz + Emz
+        Esmz0 = Esz0 + Emz0
+
+        # MATLAB lines 210--211: sign controls the field correction, not mixing.
+        iterf = np.sign(numerical.iterfactor)
+        kzstart = self.track_z(
+            numerical, beam, grid, reference, Esmz, Esmz0,
+            Esz=Esz, Emz=Emz, nn=nn, iterf=iterf, Iz=Iz,
+        )
+
+        # None means the spatial march reached the last grid plane. An index
+        # means time tracking must resume there without counting it twice.
+        if kzstart is not None:
+            self.track_t(numerical, beam, grid, reference, Esmz, Esmz0, kzstart)
+
+        self.calculate_QQr(numerical, grid)
+        return Esmz, Esmz0
+
+    def calculate_QQr(self, numerical, grid):
+        """Reconstruct charge harmonics by continuity (MATLAB 516--521).
+
+        With exp(i*kk*tau) harmonics, normalized charge continuity gives
+        i*kk*QQr[:, kk-1] + d(Izr[:, kk-1])/dz = 0. Thus a spatial change
+        in harmonic current requires a corresponding oscillating charge.
+        Differentiate the complex phasors, NOT their magnitudes.
+
+        Izr and QQr have shape (len(grid.z), Ns), even for Ns == 1. Axis 0
+        is position; columns are harmonic orders 1 through Ns, not electrons.
+        grid.dt also equals the normalized spatial spacing in this uniform
+        grid. Despite its name, this is a spatial derivative, not a time one.
+
+        NumPy's default gradient uses centered differences inside and one-sided
+        first differences at the ends, matching MATLAB gradient. Broadcasting
+        divides each column by its harmonic order without repmat or an Ns==1
+        branch. DC charge QQDCr remains the separately accumulated residence-
+        time contribution; this formula cannot be applied at harmonic zero.
+        """
+
+        Fy = np.gradient(self.Izr, grid.dt, axis=0)
+        kk = np.arange(1, numerical.Ns + 1)
+        self.QQr = -1.0 / (1.0j * kk) * Fy
+
     def track_z(
         self,
         numerical,
@@ -232,7 +322,7 @@ class BeamDynamics:
         grid,
         reference,
         Esmz,
-        Esz0,
+        Esmz0,
         *,
         Esz,
         Emz,
@@ -242,6 +332,7 @@ class BeamDynamics:
     ):
         """Track forward in space - The "forward spatial march""
 
+        Normally called by track(), which assembles the total fields first.
         Call this once on a freshly initialized BeamDynamics. All active
         electrons advance together from one longitudinal plane to the next.
         Each electron has its own arrival phase; this is NOT a simultaneous
@@ -259,14 +350,12 @@ class BeamDynamics:
             absolute-value or reflection test. The second control belongs
             to the outer iteration and is not used by this method.
         Esmz : complex array, shape (len(grid.z), numerical.Ns)
-            Working array for the total normalized RF harmonics. This method
-            fills it IN PLACE from Esz and Emz; its initial contents are ignored.
+            Working total RF array, already filled with Esz + Emz by track().
             Supply a separate array, not an alias of either source field.
-            All planes are first filled with Esz + Emz, including the exit and
-            any planes not reached before a switch to time tracking. At each
-            visited plane, the if/else selects corrected or uncorrected space
-            charge. Retain this complete array for the time continuation.
-        Esz0 : array, shape (len(grid.z),)
+            All planes must be populated, including those beyond a possible
+            time-tracking handoff. This method updates only rows requiring the
+            optional SC correction. Retain the same array for track_t().
+        Esmz0 : array, shape (len(grid.z),)
             Total normalized DC field, already assembled as the space-charge
             DC field plus Emz0. Its physical value is real. np.real below
             accepts the complex storage used by SpaceChargeState for this
@@ -331,11 +420,6 @@ class BeamDynamics:
         Iz0 = reference.Iz0
         s = reference.s
 
-        # Fill the complete working field, including the final plane and any
-        # planes not visited if spatial tracking stops early. The later time
-        # tracker needs these values as well as the corrected, visited rows.
-        Esmz[:, :] = Esz + Emz
-
         for kz in range(len(z) - 1):
 
             # 1. Predict the arrival phase at the NEXT plane
@@ -346,15 +430,15 @@ class BeamDynamics:
                 + (z[kz + 1] - z[kz]) * self.Vnz[kz, Y]
             )
 
-            # 2. Build the total RF field at this plane: corrected space charge
-            # plus the cavity field, or their ordinary sum when correction is off.
+            # 2. Optionally correct the SC contribution using the NEW current
+            # accumulated at this plane. Izr[kz] only becomes available as the
+            # march advances, so this correction cannot be assembled up front.
+            # Otherwise keep the ordinary sum already prepared by track().
             if nn > 5 and iterf <= 0 and abs(Iz[kz, 0]) > 0.01:
                 with np.errstate(divide="raise", invalid="raise"): # This is just to raise an error in case of inf or NaN
                     Esmz[kz, :] = (
                         Esz[kz, :] * self.Izr[kz, :] / Iz[kz, :] + Emz[kz, :]
                     )
-            else:
-                Esmz[kz, :] = Esz[kz, :] + Emz[kz, :]
 
             # 3. Field at the CURRENT plane and CURRENT arrival phases
             # The new Tnz[kz+1] is NOT used here.
@@ -364,7 +448,7 @@ class BeamDynamics:
                 Est[Y] += np.imag(
                     Esmz[kz, kk - 1] * np.exp(kk * 1.0j * self.Tnz[kz, Y])
                 )
-            Est[Y] += np.real(Esz0[kz])
+            Est[Y] += np.real(Esmz0[kz])
 
             # 4. Relativistic inverse-velocity Euler update (line 405).
             # The reference gamma minus one is 1/sqrt(1-s**2) - 1.
@@ -465,7 +549,7 @@ class BeamDynamics:
         )
         return kzstart
 
-    def track_t(self, numerical, beam, grid, reference, display, Esmz, Esz0, kzstart):
+    def track_t(self, numerical, beam, grid, reference, Esmz, Esmz0, kzstart):
         """Continue a spatial pass with fixed time steps (MATLAB 435--513).
 
         Call only when track_z returns an integer kzstart, on the SAME object
@@ -482,13 +566,12 @@ class BeamDynamics:
         numerical, beam, grid, reference
             The inputs used by initialize and track_z. The grid is uniform,
             with normalized spatial spacing equal to grid.dt, as in MATLAB.
-        display : DisplaySettings
-            Supplies GIFpara[3], the upstream discard distance in mm. Despite
-            belonging to MATLAB's display parameters, this value affects the
-            tracking: a backward crossing below min(zi) + GIFpara[3] ends that
-            electron's trajectory. A zero value leaves the upstream boundary
-            as the stopping condition.
-        Esmz, Esz0
+            numerical.upstream_discard_distance_mm sets the reflected-electron
+            cutoff relative to min(zi), in mm (MATLAB's GIFpara(4)). A backward
+            crossing with its lower plane below this cutoff ends the electron's
+            trajectory. Zero leaves upstream escape as the stopping condition.
+            Tracking does not depend on DisplaySettings.
+        Esmz, Esmz0
             Total normalized RF harmonics and DC field from track_z. Read-only
             here. RF phasors are interpolated before evaluating their imaginary
             parts at the electron's phase; the DC field's real part is added.
@@ -529,7 +612,7 @@ class BeamDynamics:
         Ntimes = numerical.Ntimes
         Iz0 = reference.Iz0
         s = reference.s
-        GIFpara = display.GIFpara
+        upstream_cutoff_mm = np.min(zi) + numerical.upstream_discard_distance_mm
 
         for kt in Y0:
             kz = kzstart
@@ -562,12 +645,12 @@ class BeamDynamics:
                     if kz == len(z) - 1:
                         Est = np.sum(np.imag(
                             Esmz[kz, :] * np.exp(np.arange(1, Ns + 1) * 1.0j * tt)
-                        )) + np.real(Esz0[kz])
+                        )) + np.real(Esmz0[kz])
                     else:
                         Est = np.sum(np.imag(
                             ((1.0 - kzrest) * Esmz[kz, :] + kzrest * Esmz[kz + 1, :])
                             * np.exp(np.arange(1, Ns + 1) * 1.0j * tt)
-                        )) + np.real((1.0 - kzrest) * Esz0[kz] + kzrest * Esz0[kz + 1])
+                        )) + np.real((1.0 - kzrest) * Esmz0[kz] + kzrest * Esmz0[kz + 1])
 
                     # 5. Relativistic velocity update. Unlike Vnz in track_z,
                     # Vn is v/v0 and can pass through zero into backward motion.
@@ -629,5 +712,5 @@ class BeamDynamics:
                     )
                     self.ttn[kt] = tt
                     break
-                if kz < kzp and zi[kz] < np.min(zi) + GIFpara[3]:
+                if kz < kzp and zi[kz] < upstream_cutoff_mm:
                     break

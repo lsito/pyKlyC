@@ -34,8 +34,10 @@ class NumericalSettings:
         Convergence threshold for the nonlinear iteration residual.
 
     iterfactor:
-        Relaxation factor used to mix the newly computed beam harmonics
-        with the previous iteration values.
+        Its absolute value is the relaxation weight used to mix newly computed
+        beam currents/charges with the previous iteration values. Its sign
+        separately controls the optional tracking space-charge correction:
+        a nonpositive value allows that correction after iteration 5.
 
     evolutionmethod:
         Two numerical controls, in the same order as MATLAB's vector.
@@ -46,6 +48,21 @@ class NumericalSettings:
         no greater than Rlimit, MATLAB can instead finish in local mode.
         The ordinary GUI setting is np.array([0.005, 2.0]): a 0.5% inverse-
         velocity increase threshold and a residual threshold of 2.0.
+
+    upstream_discard_distance_mm:
+        Distance from the simulation entrance to the reflected-electron
+        cutoff, in mm. A backward crossing with its lower grid plane below
+        min(grid.zi) + upstream_discard_distance_mm ends that trajectory.
+        Use 0.0 to retain tracking up to upstream escape. This is a distance,
+        not the absolute coordinate entered in MATLAB's GUI "zcut (mm)".
+        It replaces GIFpara(4) for tracking; plotting remains independent.
+
+    efficiency_end_offset_mm:
+        Distance upstream from max(grid.zi) at which the beam efficiency is
+        sampled for convergence. The observation coordinate is therefore
+        max(grid.zi) - efficiency_end_offset_mm, in mm. Zero samples the last
+        grid plane. This replaces MATLAB's GIFpara(5); the GUI normally uses
+        3*beam.rc. An observation outside the grid gives nan, as with interp1.
     """
 
     f: float
@@ -57,6 +74,8 @@ class NumericalSettings:
     Rlimit: float
     iterfactor: float
     evolutionmethod: np.ndarray
+    upstream_discard_distance_mm: float
+    efficiency_end_offset_mm: float
 
 
 @dataclass(frozen=True)
@@ -73,10 +92,14 @@ class DisplaySettings:
         Vector of runtime display and movie-generation flags.
 
     GIFpara:
-        Parameters used when generating animated output. MATLAB also uses
-        GIFpara[3] as an upstream discard distance in mm during time tracking:
-        a backward crossing below min(grid.zi) + GIFpara[3] ends that electron's
-        trajectory. It is therefore not solely a display control.
+        Parameters used when generating animated output. GIFpara[3] sets the
+        plot's upstream cut distance in mm. Python tracking instead uses
+        NumericalSettings.upstream_discard_distance_mm. Original MATLAB uses
+        GIFpara(4) for both; when exporting tracking inputs to MATLAB, put the
+        numerical discard distance in that entry to match Python's behavior.
+        Likewise, export NumericalSettings.efficiency_end_offset_mm as
+        GIFpara(5) to match the efficiency observation plane. In Python the
+        plot's end cut GIFpara[4] does not control convergence calculations.
 
     Npin:
         Number of input-power sweep points when the power-ramp mode is active.

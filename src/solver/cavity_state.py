@@ -14,7 +14,12 @@ from solver.reference import ReferenceParameters
 
 @dataclass
 class CavityState:
-    """Cavity voltages and equivalent-circuit state during evolution."""
+    """Cavity voltages and equivalent-circuit state during evolution.
+
+    flagVnc is the convergence comparison voltage. It starts at zero and is
+    managed by IterationControl after each iteration, not by solve(), so a
+    local-to-global space-charge transition can reset it for the next pass.
+    """
 
     Pinflag: np.ndarray
     Pin: np.ndarray
@@ -167,7 +172,12 @@ class CavityState:
         grid: GridParameters,
         drivefactor: float = 1.0,
     ):
-        self.flagVnc[:] = self.Vnc
+        """Assemble and solve the circuit without changing comparison voltages.
+
+        IterationControl owns flagVnc: overwriting it here would undo the reset
+        requested when changing the space-charge model. Standalone circuit tests
+        can call this method without creating iteration control.
+        """
 
         self.assemble_Mc_B(
             numerical,
