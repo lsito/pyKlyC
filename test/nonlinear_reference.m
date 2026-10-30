@@ -1,5 +1,6 @@
 function nonlinear_reference(folder)
-% Execute original loop with preinitialized identical inputs. No source edits.
+% Original loop plus explicit RF reconstruction, with identical initial inputs.
+% The original source file is not changed; its empty field block is extended.
 source = splitlines(fileread(fullfile(fileparts(mfilename('fullpath')), '..', '..', 'KlyC', 'KLJCmainsv22.m')));
 assert(contains(source{212}, 'for nn=1:Nlimit') && contains(source{532}, 'effend=interp1'));
 assert(contains(source{601}, 'Yflag~=length(Y)') && strcmp(strtrim(source{626}), 'end'));
@@ -8,6 +9,9 @@ source{322} = strrep(source{322}, 'gama/gama. ...', 'gama/gama ...');
 source{323} = strrep(source{323}, '*(exp(-2.40483*1', '.*(exp(-2.40483*1');
 source{321} = strrep(source{321}, 'parfor', 'for'); % Serial comparison, no pool.
 source{215} = ['skipped_iterations=[skipped_iterations,nn]; ' source{215}];
+% Explicit extension using the gap-voltage normalization, not original code.
+source{310} = ['for k=1:Nc; if nh(k)>=1 && nh(k)<=Ns; ' ...
+    'Emz(:,nh(k))=Emz(:,nh(k))+Vnc(k)*ez(:,k)/betae/sqrt(k0(k)); end; end'];
 record_code = ["records(end+1,:)=[nn,effend,residential,residentialel];"; ...
                "Vnc_history(end+1,:)=Vnc; Vnp_history(end+1,:)=Vnp;"; ...
                "drivefactors(end+1)=max(sqrt(min(1/Npin*(floor(2*nn/Nlimit*Npin)+1),1)),abs(sign(abs(moviedisp(4))-2)));" ];

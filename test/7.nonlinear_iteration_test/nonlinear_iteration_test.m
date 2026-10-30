@@ -5,7 +5,8 @@
 % The solver calculation below is copied from KLJCmainsv22.m, not rewritten.
 % Test adapters: in-memory Gaussian maps, two source syntax fixes, serial for,
 % history snapshots, and omission of GUI/power-reporting lines 535-600.
-% Cavity tracking fields remain zero as in the original source.
+% Explicit model extension: reconstruct RF fields from Vnc and ez using the
+% source's gap-voltage normalization. The original mode-field block is empty.
 
 test_directory=fileparts(mfilename('fullpath'));
 if ~isfile(fullfile(test_directory,'nonlinear_iteration_test.m'))
@@ -347,6 +348,15 @@ for nn=1:Nlimit
     Pmzloss=zeros(1,Nc); % to save accumulative TW ohmmic loss normalized by U0*I0
     Emzinh=0; % normalized Emz field for the inherentation
     kkinh=0; % which z index number for the start of inherentation
+
+    % ADDED RECONSTRUCTION, not present in original lines 310-313.
+    % Physical RF field: U0*Vnc(k)*ez(:,k)/sqrt(k0(k)) in kV/mm.
+    % Divide by betae*U0 for tracking. Vnc already includes input drive.
+    for k=1:Nc
+        if nh(k)>=1 && nh(k)<=Ns
+            Emz(:,nh(k))=Emz(:,nh(k))+Vnc(k)*ez(:,k)/betae/sqrt(k0(k));
+        end
+    end
     
     
     

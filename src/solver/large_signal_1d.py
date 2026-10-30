@@ -11,7 +11,6 @@ Flowchart, sequence diagram and state/control tables:
 
 import logging
 from dataclasses import dataclass
-import warnings
 
 import numpy as np
 
@@ -36,9 +35,9 @@ class LargeSignal1DResult:
     method USED in each pass, before a possible end-of-pass switch.
 
     nn is the last attempted MATLAB iteration number, not the history length.
-    control.stop/reason/iterationsuc describe termination. Convergence here is
-    convergence of the supplied-source model, NOT proof of a complete physical
-    klystron solution: Emz and Emz0 remain zero as in the available MATLAB file.
+    control.stop/reason/iterationsuc describe termination. The RF cavity field
+    is reconstructed from Vnc on every evaluated pass; Emz0 remains zero because
+    this entry point supports RF cavities only.
 
     Fields and trajectories belong to the last evaluated pass. BeamState has
     already been relaxed using that pass; no extra field solve is performed
@@ -121,11 +120,10 @@ def solve(
     this pass. Treat these live states as read-only; copy arrays to retain a
     snapshot. Skipped ramp iterations do not call it. Callback errors propagate.
 
-    IMPORTANT: the supplied KLJCmainsv22.m clears Emz and Emz0 but never fills
-    them from Vnc. This loop intentionally preserves that behavior and warns
-    about it. The circuit feels the beam through C3*Iz, but the beam receives
-    no cavity acceleration. Only space charge can change its velocity here.
-    No inferred Vnc-to-field formula is silently inserted.
+    The supplied KLJCmainsv22.m leaves its RF-field assignment empty. This loop
+    reconstructs Emz from Vnc * ez / (betae * sqrt(k0)), consistent with the
+    source's gap-voltage normalization. This closes the cavity-to-beam coupling
+    and is an explicit extension to that source. Emz0 remains zero for RF gaps.
 
     Supported scope: cylindrical beams, ordinary klystron frequency (mono=1),
     RF input/bunching/output cavities. Monotron frequency iteration, DC gaps,
@@ -142,14 +140,6 @@ def solve(
     if numerical.Nlimit < 1 or (power_ramp_mode and Npin < 1):
         raise ValueError("Nlimit and the number of power-ramp steps must be positive.")
 
-    warnings.warn(
-        "The available MATLAB source leaves cavity tracking fields Emz and Emz0 "
-        "at zero. This solve preserves that behavior: cavity-to-beam acceleration "
-        "is absent, even if the voltage iterations converge.",
-        RuntimeWarning,
-        stacklevel=2,
-    )
-
     beam_state = BeamState.initialize(numerical, beam, grid, reference)
     cavity_state = CavityState.initialize(numerical, cavities, beam, reference)
     space_charge_state = SpaceChargeState.initialize(
@@ -162,11 +152,6 @@ def solve(
     drivefactors = []
     SCmethods = []
     skipped_iterations = []
-    # These cavity contributions remain zero in the current source model.
-    # Allocate them once; track() assembles its own total fields each pass.
-    Emz = np.zeros((len(grid.z), numerical.Ns), dtype=complex)
-    Emz0 = np.zeros(len(grid.z))
-
     for nn in range(1, numerical.Nlimit + 1):
         drivefactor = calculate_drivefactor(nn, numerical, Npin, power_ramp_mode)
 
@@ -189,7 +174,14 @@ def solve(
             drivefactor=drivefactor,
         )
 
-        # 2. MATLAB 304--350: preserve the source's zero cavity-field buffers.
+        # 2. Reconstruct the current cavity fields from the solved amplitudes.
+        # Explicit extension of MATLAB's empty mode-field block (310-313),
+        # using its gap-voltage normalization. Includes input drive on nn=1.
+        Emz, Emz0 = cavity_fields.calculate_mode_fields(
+            numerical, cavities, grid, cavity_state,
+        )
+
+        # MATLAB 314--347: update the separate space-charge fields.
         # Space charge is zero on nn=1; later it uses the selected local/global
         # model and the beam estimate from the previous nonlinear iteration.
         SCmethods.append(space_charge_state.SCmethod)

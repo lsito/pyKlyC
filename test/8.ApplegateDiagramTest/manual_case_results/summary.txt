@@ -1,0 +1,13 @@
+Manual parameters, 1D/GS solver with RF cavity feedback: Emz=sum(Vnc*ez/(betae*sqrt(k0))) by harmonic. This reconstruction extends the supplied MATLAB source. Emz0=0 for RF-only cavities. An EM/2D manual-result comparison remains separate validation.
+
+Stop reason: converged
+Converged flag: 1
+Evaluated iterations: 28
+Runtime: 165.61 s
+Grid planes: 3699; dz: 0.7884472 mm
+Domain: [-74.7333, 2840.9444] mm
+Trajectory diagnostic: {'n': np.int64(4505), 'status': 'Normal'}
+Maximum fundamental modulation: 1.6394482
+Output-port efficiency: 0.75834442
+Power-balance efficiency: 0.7398765+0j
+Maximum cavity tracking field: 1.1762094

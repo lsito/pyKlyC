@@ -326,8 +326,9 @@ Comparing final fields against final beam sources must account for this order.
 
 The entry point supports cylindrical beams and standing-wave RF input,
 bunching and output cavities with `mono=1`. It rejects sheet-beam, monotron,
-DC-gap and traveling-wave cases. Final RF power/loss accounting, corrected
-power-ramp efficiency tables and export/animation are separate work.
+DC-gap and traveling-wave cases. Final cavity and space-charge power accounting
+are separate diagnostics called after the solve. Corrected power-ramp efficiency
+tables and export/animation remain separate work.
 
 | Responsibility | Implementation |
 | --- | --- |
@@ -337,6 +338,13 @@ power-ramp efficiency tables and export/animation are separate work.
 | Spatial/time tracking and charge reconstruction | [`beam_dynamics.py`](../src/solver/beam_dynamics.py) |
 | Beam initialization and relaxation | [`beam_state.py`](../src/solver/beam_state.py) |
 | Residuals, history and decisions | [`convergence.py`](../src/solver/convergence.py) |
+| Final trajectory diagnostics: `check_boundary_reaching()` and `check_negative_velocity()`, called after the solve (MATLAB 640-662) | [`diagnostics/beam.py`](../src/diagnostics/beam.py) |
+| Peak fundamental modulation and plot reference electron: `find_peak_modulation()` (MATLAB 708-712; zero-based indices) | [`diagnostics/beam.py`](../src/diagnostics/beam.py) |
+| Final gap voltages and cavity power: `calculate_cavity_power()`, using `result.drivefactors[-1]` (MATLAB 664-706, excluding traveling-wave structures) | [`diagnostics/cavity.py`](../src/diagnostics/cavity.py) |
+| Accumulated space-charge exchange: `calculate_space_charge_power()` (MATLAB 715-722) | [`diagnostics/space_charge.py`](../src/diagnostics/space_charge.py) |
+| Final efficiency balance: `calculate_power_balance()` (MATLAB 724) | [`diagnostics/power_balance.py`](../src/diagnostics/power_balance.py) |
+| Applegate and current-harmonic plots: `plot_applegate()` and `plot_current_harmonics()` (MATLAB 729-773) | [`plotting/beam.py`](../src/plotting/beam.py) |
+| Paired Python/MATLAB plotting test, using test 7 checkpoints | [Test 8 README](../test/8.ApplegateDiagramTest/README.md) |
 | Paired Python/MATLAB nonlinear test | [Test 7 README](../test/7.nonlinear_iteration_test/README.md) |
 | Orchestration checks | [`test_large_signal_1d.py`](../test/test_large_signal_1d.py) |
 

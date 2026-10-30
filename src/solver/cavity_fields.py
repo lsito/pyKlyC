@@ -21,6 +21,40 @@ class CavityFields:
     vpz: np.ndarray
     alfaz: np.ndarray #TWT
 
+    def calculate_mode_fields(self, numerical, cavities, grid, cavity_state):
+        """Reconstruct the RF tracking field from the current circuit solution.
+
+        ez has one column per cavity, while Emz has one per RF harmonic.
+        Cavities at the same harmonic contribute coherently, including phase.
+        The physical phasor is U0 * Vnc[k] * ez[:, k] / sqrt(k0[k]) in kV/mm,
+        consistent with MATLAB's gap-voltage integral at lines 674/682/692.
+        Tracking needs that field divided by betae * U0, hence the expression
+        below. C3 has an additional beam-to-circuit normalization and cannot
+        simply be multiplied by Vnc to obtain Emz.
+
+        This reconstructs the missing RF-field assignment in the supplied
+        MATLAB loop; it is not copied from its empty lines 310-313. Vnc already
+        includes drivefactor, loading and beam excitation. Do not apply these
+        again or discard its phase. Tracking uses imag(Emz_m * exp(i*m*t)).
+
+        Each call builds the current fields afresh, not an increment to the
+        previous pass. Profiles and circuit amplitudes remain unchanged.
+        DC gaps and traveling-wave structures are not implemented here.
+        """
+        if np.any(cavities.nh == 0) or np.any(cavities.type == 2):
+            raise NotImplementedError("Mode-field reconstruction supports RF cavities only.")
+
+        Emz = np.zeros((len(grid.z), numerical.Ns), dtype=complex)
+        Emz0 = np.zeros(len(grid.z))
+        for k in range(numerical.Nc):
+            nh = cavities.nh[k]
+            if 1 <= nh <= numerical.Ns:
+                Emz[:, nh - 1] += (
+                    cavity_state.Vnc[k] * self.ez[:, k]
+                    / grid.betae / np.sqrt(grid.k0[k])
+                )
+        return Emz, Emz0
+
     @classmethod
     def calculate(
         cls,

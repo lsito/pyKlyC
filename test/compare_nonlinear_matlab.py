@@ -1,4 +1,4 @@
-"""Optional original-MATLAB loop comparison; see test/README.md for commands.
+"""MATLAB loop plus explicit RF reconstruction; see test/README.md.
 
 No argument: generate inputs and Python outputs in a fresh temporary directory.
 One directory argument: compare with the outputs of nonlinear_reference.m.
@@ -94,9 +94,9 @@ def compare(folder):
             if key == 'Y':
                 other = other - 1
             if key == 'records':
-                # Efficiency itself is ~roundoff without cavity acceleration.
-                # Compare all other diagnostics directly; validate the ill-
-                # conditioned ratio against each engine's own stored effend.
+                # A near-zero efficiency or SC-switch reset can make its
+                # relative residual sensitive. Validate that ratio against
+                # each engine's own stored effend; compare the rest directly.
                 np.testing.assert_allclose(other[:, :3], value[:, :3], rtol=1e-9, atol=1e-10,
                                            err_msg=f'{path.stem}: record iteration/effend/voltage residual')
                 for records, modes in [(value, expected['SCmethods']), (other, actual['SCmethods'])]:

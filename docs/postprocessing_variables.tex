@@ -1,0 +1,321 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=20mm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{array,booktabs,longtable}
+\usepackage[hidelinks]{hyperref}
+\usepackage{url}
+\urlstyle{tt}
+\newcommand{\code}[1]{\ifmmode\text{\nolinkurl{#1}}\else\nolinkurl{#1}\fi}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newenvironment{vartable}{%
+  \small
+  \begin{longtable}{@{}L{0.22\textwidth}L{0.49\textwidth}L{0.23\textwidth}@{}}
+  \toprule
+  Variable & Meaning & Units, shape, or source \\
+  \midrule
+  \endhead
+  \bottomrule
+  \endfoot
+}{\end{longtable}}
+\setlength{\emergencystretch}{2em}
+\renewcommand{\arraystretch}{1.18}
+
+\title{PyKlyC: Post-processing Variables and Display Parameters}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+This reference covers the implemented diagnostics following the nonlinear
+iteration and the first two plots: the Applegate diagram and current
+harmonic amplitudes. It follows \code{KLJCmainsv22.m}, particularly lines
+640--773. The final section documents all six entries of MATLAB's
+\code{GIFpara} vector, including their later animation uses.
+
+Unless stated otherwise, Python indices are zero-based. Let
+\(N_z^{\mathrm{grid}}=\operatorname{len}(\code{grid.z})\) and
+\(H=\code{Ntimes}\,N_z^{\mathrm{grid}}\).
+These are explanatory shape abbreviations, not new program variables.
+The quantity \code{Nz} is a mesh-resolution setting; it is not generally
+equal to \(N_z^{\mathrm{grid}}\).
+
+\section{Reference quantities and coordinates}
+
+\begin{vartable}
+\code{U0} & Reference beam voltage. & kV \\
+\code{I0} & Magnitude of the reference average current, per beam. & A \\
+\code{Iz0} & Signed reference average current. & A \\
+\code{Nbeam} & Number of beams. & Dimensionless \\
+\code{s} & Reference velocity divided by the speed of light: \(v_0/c\). & Dimensionless \\
+\code{betae} & Reference electronic propagation constant, \(\omega/v_0\), expressed for millimetre coordinates. & \(\mathrm{mm}^{-1}\) \\
+\code{zi} & Physical longitudinal grid. & \((N_z^{\mathrm{grid}},)\), mm \\
+\code{z} & Normalized longitudinal grid: \(z=\beta_e z_i\). & \((N_z^{\mathrm{grid}},)\), dimensionless \\
+\code{dz} & Physical longitudinal grid spacing. & mm \\
+\code{grid.dt} & Normalized step \(\beta_e\,dz\); also the phase increment used in time tracking. & Dimensionless \\
+\code{esign} & Charge-sign convention used in the force and energy equations. & \(+1\) for electrons \\
+\code{eta0} & Vacuum wave impedance. & \(\Omega\) \\
+\(P_{\mathrm{beam}}\) & Total reference beam power: \(N_{\mathrm{beam}}(1000U_0)I_0\). & W; explanatory notation \\
+\end{vartable}
+
+\section{Beam and particle quantities read by the diagnostics}
+
+\begin{vartable}
+\code{Nt} & Number of emitted samples over one RF period. & Integer \\
+\code{Ns} & Number of retained RF harmonics. & Integer \\
+\code{Ntimes} & Multiplier allocating trajectory-history capacity. It is not a number of RF periods. & Integer \\
+\code{Y} & Active particle-column indices. & Integer array \\
+\code{Yflag} & Number of particles counted as exiting downstream. & Integer counter \\
+\code{tn1} & Arrival phase of each particle at the entrance. & \((Nt,)\), radians \\
+\code{Tn} & Phase/time history \(\omega t\) along tracked trajectories. & \((H,Nt)\) \\
+\code{Zn} & Normalized position history along tracked trajectories. & \((H,Nt)\) \\
+\code{Vn} & Signed velocity history, \(v/v_0\). & \((H,Nt)\) \\
+\code{Tnz} & Arrival phase at longitudinal grid-plane crossings. & \((N_z^{\mathrm{grid}},Nt)\) \\
+\code{IzDC} & DC current divided by \code{Iz0}. & \((N_z^{\mathrm{grid}},)\) \\
+\code{Iz} & Complex current-harmonic amplitudes divided by \code{Iz0}; column \(k\) in Python represents harmonic \(k+1\). & \((N_z^{\mathrm{grid}},Ns)\) \\
+\code{effe} & Beam kinetic-power reduction relative to reference input beam power, evaluated along the tube. & \((N_z^{\mathrm{grid}},)\), dimensionless \\
+\end{vartable}
+
+\code{Tn} and \code{Zn} describe the trajectory history, including any
+continuation by time tracking. \code{Tnz} describes grid-plane crossings.
+Unwritten entries of \code{Zn} and \code{Vn} are positive infinity and
+must be excluded when plotting. The arrival phases are stored unwrapped;
+phase wrapping is a display operation.
+
+\section{Cavity and field quantities}
+
+\begin{vartable}
+\code{Nc} & Number of cavities or interaction structures. & Integer \\
+\code{type} & Input: 0; intermediate: 1; output: \(-1\); traveling-wave: 2. & \((Nc,)\) \\
+\code{nh} & Harmonic associated with each cavity; zero denotes a static gap. & \((Nc,)\) \\
+\code{zshift} & Cavity-center positions. & \((Nc,)\), mm \\
+\code{k0} & Resonant free-space wavenumber of each cavity. & \((Nc,)\), \(\mathrm{mm}^{-1}\) \\
+\code{Qin} & Intrinsic cavity quality factor. & \((Nc,)\), dimensionless \\
+\code{gaman} & Output-load reflection coefficient. & \((Nc,)\), complex \\
+\code{Pin} & Nominal incident RF power. & \((Nc,)\), W \\
+\code{Vin} & Normalized incident-wave amplitude before ramp scaling. & \((Nc,)\) \\
+\code{drivefactor} & Incident-voltage multiplier; its square multiplies incident power. & Scalar \\
+\code{Vnc} & Normalized complex cavity-mode amplitude. & \((Nc,)\) \\
+\code{Vnp} & Normalized port-wave amplitude: reflected wave at an input, outgoing wave at an output. & \((Nc,)\), complex \\
+\code{ez} & Cavity profiles sampled on \code{zi}. RF profiles have units \(\mathrm{mm}^{-3/2}\); static profiles use kV/mm. & \((N_z^{\mathrm{grid}},Nc)\) \\
+\code{Esz0} & Separate normalized DC space-charge field in Python. & \((N_z^{\mathrm{grid}},)\) \\
+\code{Esz} & Separate normalized RF space-charge harmonics. & \((N_z^{\mathrm{grid}},Ns)\), complex \\
+\end{vartable}
+
+The normalized profile \code{ez} is distinct from the cavity contribution
+\code{Emz} used by tracking. The total RF tracking field is \code{Esmz};
+the corresponding DC names are \code{Emz0} and \code{Esmz0}.
+MATLAB reuses \code{Esz0} for its combined DC field. The implemented
+space-charge diagnostic reads the separate space-charge field; these agree
+in the currently supported solver because \code{Emz0} is zero.
+
+\section{Implemented diagnostic outputs}
+
+\subsection{Trajectory and modulation diagnostics}
+All functions in this table belong to \code{src/diagnostics/beam.py}.
+
+\begin{vartable}
+\code{n} & Largest last-written history row among active particles. Retains MATLAB's one-based row numbering. & \code{check_boundary_reaching()} \\
+\code{status} & MATLAB bookkeeping classification: \code{Storage limit}, \code{Reflected electrons}, or \code{Normal}. & \code{check_boundary_reaching()} \\
+\code{minimum_v_over_c} & Minimum recorded \code{Vn} multiplied by \code{s}. & \code{check_negative_velocity()} \\
+\code{negative_velocity} & Whether the minimum recorded velocity is negative. & Boolean; \code{check_negative_velocity()} \\
+\code{Izmax} & Maximum of \code{abs(Iz[:, 0])}. & \code{find_peak_modulation()} \\
+\code{ntemp} & Grid index of strongest fundamental current modulation. & Zero-based; \code{find_peak_modulation()} \\
+\code{ncenter} & Particle-column index nearest the fundamental current-peak phase at that plane. & Zero-based; \code{find_peak_modulation()} \\
+\end{vartable}
+
+The \code{Reflected electrons} status means missing downstream exits under
+MATLAB's bookkeeping; actual recorded negative velocity is checked separately.
+MATLAB reuses temporary names: \code{ntemp} inside the boundary check is a
+last-written history row, whereas the modulation diagnostic returns a grid
+index with that name.
+
+The fundamental current varies as
+\[
+\operatorname{Im}\!\left(Iz_1 e^{i\theta}\right)
+=|Iz_1|\sin\!\left(\theta+\arg Iz_1\right).
+\]
+Its peak phase is \(\theta_{\mathrm{peak}}=\pi/2-\arg Iz_1\), modulo
+\(2\pi\). The selected particle minimizes the distance to this phase on
+the unit circle. Higher harmonics can shift the actual current peak;
+\code{ncenter} is a plotting reference, not an exact bunch centroid.
+
+\subsection{Cavity-power diagnostics}
+These outputs belong to \code{calculate_cavity_power()} in
+\code{src/diagnostics/cavity.py}.
+
+\begin{vartable}
+\code{Vng} & Complex gap voltage for each cavity. & \((Nc,)\), kV \\
+\code{effloss} & Each cavity's wall-loss power divided by total reference beam power. & \((Nc,)\), dimensionless \\
+\code{lossacc} & Cumulative wall-loss fraction along the tube; includes half a cavity's loss exactly at its center. & \((N_z^{\mathrm{grid}},)\) \\
+\code{RFinput} & Total net RF input power after reflection. & W \\
+\code{refcavity} & Complex reflection coefficient of the last input cavity. & Scalar, complex \\
+\code{effcavity} & Load power from the last output cavity divided by total reference beam power. & Scalar, dimensionless \\
+\end{vartable}
+
+\subsection{Space-charge exchange and final power balance}
+
+\begin{vartable}
+\code{effSCDC} & Accumulated DC space-charge energy-exchange contribution relative to the entrance. & \code{calculate_space_charge_power()} \\
+\code{effSCRF} & Accumulated RF space-charge energy-exchange contribution relative to the entrance. & \code{calculate_space_charge_power()} \\
+\code{effSC} & Sum \code{effSCDC + effSCRF}. & \code{calculate_space_charge_power()} \\
+\code{effend} & Beam efficiency sampled at the observation position. & \code{calculate_power_balance()} \\
+\code{effSCend} & \code{effSC} sampled at the same position. & \code{calculate_power_balance()} \\
+\code{effendmodified} & RF efficiency inferred from the final energy balance. & \code{calculate_power_balance()} \\
+\end{vartable}
+
+The first function is in \code{src/diagnostics/space_charge.py}; the second
+is in \code{src/diagnostics/power_balance.py}. All quantities beginning
+with \code{eff} are fractions, not percentages. The accumulated space-charge
+terms can have either sign; they are not necessarily dissipative losses.
+With \(\Delta z_{\mathrm{norm}}=\beta_e\,dz\), the left-endpoint updates are
+\begin{align}
+\mathrm{effSCDC}_j &= \mathrm{effSCDC}_{j-1}
+ + e_{\mathrm{sign}}\Delta z_{\mathrm{norm}} IzDC_{j-1}Esz0_{j-1},\\
+\mathrm{effSCRF}_j &= \mathrm{effSCRF}_{j-1}
+ + \frac{e_{\mathrm{sign}}\Delta z_{\mathrm{norm}}}{2}
+ \sum_{m=1}^{N_s}\operatorname{Re}\!\left(Iz_{j-1,m}^{*}Esz_{j-1,m}\right).
+\end{align}
+The final balance is
+\[
+\boxed{\mathrm{effendmodified}
+ =\mathrm{effend}-\mathrm{effSCend}
+ -\sum_k\mathrm{effloss}_k
+ +\frac{\mathrm{RFinput}}{P_{\mathrm{beam}}}.}
+\]
+
+\section{Quantities for the first two plots}
+
+These plotting functions are implemented in \code{src/plotting/beam.py} as
+\code{plot_applegate()} and \code{plot_current_harmonics()}.
+The symbols \(\psi\), \(\psi_c\), and \(\psi_{\mathrm{plot}}\) below
+explain MATLAB's expression rather than introduce existing state variables.
+
+\begin{vartable}
+\code{zpeak} & \code{grid.zi[ntemp]}: physical position of strongest fundamental modulation. & mm \\
+\code{phase_reference} & \code{beam.tn1[ncenter]}: selected electron's entrance phase. & radians \\
+\code{Ntp} & MATLAB display parameter used to set trajectory-sampling density; also controls animation time sampling. & Positive integer \\
+\code{kp} & Column index of a particle being plotted. & Integer \\
+\code{Zn[:, kp] / betae} & Physical particle position. & Applegate horizontal axis, mm \\
+\(\psi=\code{Tn}-\code{Zn}\) & Phase relative to motion at the reference velocity: \(\omega t-\omega x/v_0\). & Unwrapped phase \\
+\(\psi_c=\code{tn1[ncenter]}-\code{z[0]}\) & Center of the displayed phase window. & radians \\
+\(\psi_{\mathrm{plot}}\) & Phase wrapped into \([\psi_c-\pi,\psi_c+\pi)\). & Applegate vertical axis \\
+\code{ez_background} & Magnitude of the sum of RF cavity profiles, suppressing static-gap columns. & Second Applegate axis, \(\mathrm{mm}^{-3/2}\) \\
+\code{abs(Iz[:, k])} & Normalized amplitude of harmonic number \(k+1\) in Python. & Current-harmonic vertical axis \\
+\code{zmax} & Right plotting limit; proposed usage is \code{max(zi)} minus \code{efficiency_end_offset_mm}. & mm \\
+\end{vartable}
+
+The Applegate phase wrapping is
+\[
+\psi_{\mathrm{plot}}=\psi-2\pi
+\left\lfloor\frac{\psi-\psi_c+\pi}{2\pi}\right\rfloor.
+\]
+Its field background is
+\[
+\mathrm{ez\_background}(z_i)
+=\left|\sum_k ez(z_i,k)\operatorname{sign}(nh_k)\right|.
+\]
+This is a normalized profile, not a field scaled by \code{Vnc} and not the
+instantaneous force field experienced by the particles. Python should form
+a separate background array without modifying \code{cavity_fields.ez}.
+
+\section{MATLAB GIFpara and the Python mapping}
+
+The exact MATLAB variable name is \code{GIFpara}, not \code{GIFparams}.
+It is a six-entry vector mixing display parameters with quantities also
+used in numerical calculations. MATLAB entry \code{GIFpara(j)} corresponds
+to Python entry \code{GIFpara[j-1]}.
+
+\begin{longtable}{@{}L{0.16\textwidth}L{0.38\textwidth}L{0.40\textwidth}@{}}
+\toprule
+Entry & Meaning and MATLAB use & Python counterpart / implementation status \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\code{GIFpara(1)}\newline Python \code{[0]}
+& Sets \code{Ntp}. Controls displayed-particle subsampling in trajectory plots.
+  For animations, sets the normalized time step \(dtp=2\pi/Ntp\), i.e.
+  \(Ntp\) time intervals per RF period. Dimensionless positive integer.
+& Stored in \code{DisplaySettings.GIFpara[0]}. Plotting argument:
+  \code{Ntp}. Full animation sampling is not yet implemented. It does not
+  set the solver's \code{Nt} or \code{grid.dt}. \\
+\code{GIFpara(2)}\newline Python \code{[1]}
+& Sets \code{ymin}, the lower velocity-axis limit. Applies to either
+  \(v/c\) or \(\gamma v/c\), according to entry 6. Dimensionless.
+& Stored in \code{DisplaySettings.GIFpara[1]}. A display limit; no effect
+  on forces, velocities, or convergence. Not used for the first two plots. \\
+\code{GIFpara(3)}\newline Python \code{[2]}
+& Sets \code{ymax}, the upper velocity-axis limit, using the same convention
+  as entry 2. Dimensionless.
+& Stored in \code{DisplaySettings.GIFpara[2]}. A display limit; no effect
+  on the computed solution. Not used for the first two plots. \\
+\code{GIFpara(4)}\newline Python \code{[3]}
+& Upstream cut distance in mm: \(z_{\min}=\min(zi)+GIFpara(4)\).
+  Sets the animation's lower position limit. MATLAB also discards a
+  backward-moving particle when the lower crossed grid plane is below this
+  cutoff (line 503).
+& Tracking uses the separate numerical setting
+  \code{NumericalSettings.upstream_discard_distance_mm}.
+  \code{DisplaySettings.GIFpara[3]} is the display cut. When exporting
+  tracking inputs to MATLAB, use the numerical discard distance in entry 4.
+  This value is a distance, not an absolute position. \\
+\code{GIFpara(5)}\newline Python \code{[4]}
+& Downstream cut distance in mm:
+  \(z_{\max}=\max(zi)-GIFpara(5)\).
+  Also sets the efficiency observation position for convergence and power
+  balance. Later selects the nearest grid plane for spent-beam analysis.
+& Numerical calculations use
+  \code{NumericalSettings.efficiency_end_offset_mm}.
+  \code{DisplaySettings.GIFpara[4]} is a separate display cut. The proposed
+  first two plots can receive an explicit \code{zmax}; use the numerical
+  observation position when matching MATLAB. Export that numerical offset
+  as entry 5 for MATLAB comparisons. \\
+\code{GIFpara(6)}\newline Python \code{[5]}
+& Sets \code{velocitytype}. Zero plots \(v/c\); any nonzero value plots
+  \(\gamma v/c\), where \(\gamma=[1-(v/c)^2]^{-1/2}\).
+  The latter is longitudinal momentum divided by \(mc\) in this 1D model.
+& Stored in \code{DisplaySettings.GIFpara[5]}. Selects a future velocity
+  or phase-space plot's vertical quantity; it does not change tracking.
+  Not used for the first two plots. \\
+\end{longtable}
+
+\subsection{Details needed for a faithful translation}
+
+\begin{itemize}
+\item The Applegate diagram chooses a stride
+  \(\max(\operatorname{round}(Nt/Ntp),1)\), takes the corresponding emitted
+  sample indices, and intersects them with \code{Y}. Thus \code{Ntp} is not
+  a guarantee of exactly that many plotted trajectories. The later MATLAB
+  velocity plot uses \(\operatorname{round}(Nt/Ntp)\) without the lower bound.
+\item MATLAB's positive half-integer rounding differs from NumPy's default
+  ties-to-even rounding. Exact subsampling parity should account for this.
+\item The first two MATLAB figures use \([\min(zi),z_{\max}]\), not
+  \([z_{\min},z_{\max}]\). Entry 4 therefore does not crop their left edge,
+  although it can already have affected reflected-particle tracking.
+\item Entries 2, 3, and 6 concern velocity displays, not the Applegate
+  phase axis or the current-harmonic amplitudes.
+\item The final efficiency uses interpolation at \(z_{\max}\). Spent-beam
+  analysis instead rounds to a grid-plane index; these locations need not
+  coincide exactly when the offset is not an integer number of mesh steps.
+\item \code{GIFpara} specifies parameters. Figure and movie generation are
+  enabled by separate controls such as \code{figuredisp} and \code{moviedisp}.
+\item \code{DisplaySettings} already stores the legacy vector, but this does
+  not mean all of its plotting and animation consumers exist in Python yet.
+\end{itemize}
+
+\section{Source locations}
+\begin{itemize}
+\item \code{KlyC/KLJCmainsv22.m}: line 503 (upstream discard), line 532
+  (efficiency observation), lines 640--724 (diagnostics), lines 729--773
+  (first two plots), lines 799--820 (velocity plot), line 840 (spent-beam
+  plane), and line 970 onward (animation sampling).
+\item \code{pyKlyC/src/model/settings.py}: \code{NumericalSettings} and
+  \code{DisplaySettings} definitions.
+\item \code{pyKlyC/src/diagnostics/}: implemented trajectory, modulation,
+  cavity-power, space-charge-power, and final power-balance functions.
+\end{itemize}
+
+\end{document}

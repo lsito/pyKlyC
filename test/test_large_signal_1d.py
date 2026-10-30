@@ -1,8 +1,4 @@
-"""End-to-end tests of the supplied-source nonlinear iteration.
-
-The expected zero cavity-to-beam field is tested explicitly; these tests do
-not establish physical klystron gain. No notebook outputs are overwritten.
-"""
+"""End-to-end tests of the nonlinear iteration with RF cavity feedback."""
 
 from dataclasses import replace
 from pathlib import Path
@@ -10,7 +6,6 @@ from types import SimpleNamespace
 import sys
 import unittest
 from unittest.mock import patch
-import warnings
 
 import numpy as np
 
@@ -26,6 +21,7 @@ from solver.cavity_fields import CavityFields
 from solver.beam_dynamics import BeamDynamics
 from solver.convergence import ConvergenceRecord
 from solver.large_signal_1d import solve, calculate_drivefactor
+from constants import eta0
 
 
 def inputs(modulation=0.0, Nlimit=20):
@@ -52,19 +48,18 @@ def inputs(modulation=0.0, Nlimit=20):
     grid = GridParameters.calculate(numerical, cavities, tube, beam, reference, 5.)
     # Small prescribed normalized profiles isolate loop wiring from map imports
     # (already covered by the dedicated cavity-field notebook comparisons).
-    C3 = 0.01 * np.exp(-((grid.zi.reshape(-1, 1) - cavities.zshift) / 10.)**2)
-    fields = CavityFields(ez=C3.copy(), C3=C3, vpz=np.zeros_like(C3), alfaz=np.zeros_like(C3))
+    ez = 0.001 * np.exp(-((grid.zi.reshape(-1, 1) - cavities.zshift) / 10.)**2)
+    C3 = ez * eta0 * reference.I0 / np.sqrt(grid.k0) / grid.betae / reference.U0 / 1000
+    fields = CavityFields(ez=ez, C3=C3, vpz=np.zeros_like(C3), alfaz=np.zeros_like(C3))
     return numerical, beam, cavities, grid, reference, fields
 
 
 def run(*args, **kwargs):
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message="The available MATLAB source.*", category=RuntimeWarning)
-        return solve(*args, **kwargs)
+    return solve(*args, **kwargs)
 
 
 class NonlinearSolveTests(unittest.TestCase):
-    def test_no_space_charge_and_no_cavity_acceleration(self):
+    def test_rf_acceleration_without_space_charge(self):
         args = inputs(modulation=0.15, Nlimit=40)
         result = run(*args, factor=0.0)
         self.assertTrue(result.control.stop)
@@ -73,20 +68,30 @@ class NonlinearSolveTests(unittest.TestCase):
         self.assertEqual(result.space_charge_state.SCmethod, 1)
         self.assertEqual(result.SCmethods[0], 0)
         self.assertEqual(result.SCmethods[1], 1)
-        np.testing.assert_array_equal(result.Emz, 0)
+        self.assertGreater(np.max(np.abs(result.Emz)), 0)
         np.testing.assert_array_equal(result.Emz0, 0)
-        np.testing.assert_array_equal(result.Esmz, 0)
+        np.testing.assert_array_equal(result.Esmz, result.Emz)
         np.testing.assert_array_equal(result.Esmz0, 0)
-        np.testing.assert_allclose(result.beam_state.effe, 0., atol=1e-14)
-        np.testing.assert_allclose(result.beam_state.vez, 1., atol=1e-14)
-        np.testing.assert_allclose(result.dynamics.Utn, args[1].Ut)
+        self.assertGreater(np.ptp(result.dynamics.Utn), 1e-3)
+        expected, _ = args[-1].calculate_mode_fields(args[0], args[2], args[3], result.cavity_state)
+        np.testing.assert_array_equal(result.Emz, expected)
         self.assertGreater(np.max(np.abs(result.cavity_state.Vnc)), 0)
         self.assertEqual(len(result.history.records), len(result.Vnc_history))
         self.assertEqual(len(result.history.records), len(result.drivefactors))
 
-    def test_source_limitation_is_reported(self):
-        with self.assertWarnsRegex(RuntimeWarning, "cavity-to-beam acceleration"):
-            solve(*inputs(Nlimit=1), factor=0.)
+    def test_zero_drive_uniform_beam_is_drift(self):
+        numerical, beam, cavities, *rest = inputs(Nlimit=1)
+        cavities = replace(cavities, Pin=np.zeros(2))
+        result = run(numerical, beam, cavities, *rest, factor=0.)
+        np.testing.assert_allclose(result.dynamics.Utn, beam.Ut, atol=1e-10)
+        np.testing.assert_allclose(result.beam_state.vez, 1., atol=1e-13)
+
+    def test_first_pass_driven_cavity_modulates_a_uniform_beam(self):
+        args = inputs(Nlimit=1)
+        result = run(*args, factor=0.)
+        self.assertGreater(np.ptp(result.dynamics.Utn), 1e-3)
+        self.assertGreater(abs(result.beam_state.Iz[-1, 0]), 1e-5)
+        np.testing.assert_array_equal(result.space_charge_state.Esz, 0)
 
     def test_iteration_callback_is_observational_and_skips_ramp_gaps(self):
         args = inputs(modulation=0.15, Nlimit=80)
@@ -95,7 +100,7 @@ class NonlinearSolveTests(unittest.TestCase):
         def capture(record, beam_state, cavity_state, space_charge_state, dynamics):
             snapshots.append((record.iteration, space_charge_state.SCmethod,
                               cavity_state.Vnc.copy(), beam_state.Iz.copy()))
-            np.testing.assert_allclose(beam_state.effe, 0.0, atol=1e-14)
+            self.assertTrue(np.all(np.isfinite(beam_state.effe)))
         result = run(*args, factor=0., power_ramp_mode=True, Npin=4, on_iteration=capture)
         self.assertEqual([snapshot[0] for snapshot in snapshots],
                          [record.iteration for record in result.history.records])

@@ -209,8 +209,144 @@ The solver deliberately does the same and emits a warning: cavity voltages are
 computed, but they do not accelerate the beam. Convergence is not evidence of
 physical klystron gain. Adding the missing cavity-to-beam field connection is
 deferred, not silently inferred. Monotron, sheet-beam, DC-gap and traveling-wave
-branches are explicitly unsupported by this entry point. Final RF power/loss
-accounting, corrected ramp-efficiency tables and animations are not included.
+branches are explicitly unsupported by this entry point. Final cavity power/loss
+accounting and space-charge energy accounting are available separately below.
+Corrected ramp-efficiency tables and animations are not included.
+
+#### First post-processing step: final trajectory diagnostics
+
+The [LaTeX variable reference](docs/postprocessing_variables.tex) collects the
+post-processing and plotting quantities, including all six MATLAB `GIFpara`
+entries and their Python counterparts.
+
+MATLAB lines 640-662 inspect the completed particle histories. Run this after
+`solve()`; it does not change the solution or its convergence decision:
+
+```python
+from diagnostics.beam import check_boundary_reaching, check_negative_velocity
+
+boundary = check_boundary_reaching(result.dynamics)
+velocity = check_negative_velocity(result.dynamics, reference)
+print(boundary)
+print(velocity)
+```
+
+The boundary result contains `n` (MATLAB's one-based last written history row)
+and `status`. The velocity result contains `minimum_v_over_c` and
+`negative_velocity`. The original `Storage limit` branch
+takes priority over the downstream exit count. Its `Reflected electrons` classification
+means missing downstream exits; recorded backward motion is checked separately.
+These final checks differ from the per-iteration plotting label in
+`ConvergenceRecord`.
+
+#### Cavity gap voltages and power accounting
+
+MATLAB lines 664-706 are available as a separate diagnostic after `solve()`:
+
+```python
+from diagnostics.cavity import calculate_cavity_power
+
+cavity_power = calculate_cavity_power(
+    cavities, cavity_fields, result.cavity_state, beam, grid, reference,
+    drivefactor=result.drivefactors[-1],
+)
+```
+
+`Vng` contains complex gap voltages in kV. `effloss` contains each cavity's
+wall loss divided by total reference beam power; `lossacc` accumulates these
+fractions along `grid.zi`, with half a cavity's loss at its center. `RFinput`
+is the sum of net RF input powers in W. As in MATLAB, `refcavity` is the
+complex reflection coefficient of the last input cavity, and `effcavity` is
+the load efficiency of the last output cavity. Both default to zero when
+there is no corresponding cavity.
+
+Use the saved drive factor from the final evaluated circuit solve: it scales
+incident voltage, while its square scales power. The function changes no
+solver state. Traveling-wave accounting is not implemented. The static-gap
+voltage formula is included for supplied circuit states; the nonlinear solver
+still does not support DC gaps.
+
+#### Peak fundamental modulation and plot reference electron
+
+MATLAB lines 708-712 locate the strongest fundamental current modulation and
+select an active electron nearest the fundamental peak phase at that plane:
+
+```python
+from diagnostics.beam import find_peak_modulation
+
+modulation = find_peak_modulation(result.beam_state, result.dynamics)
+zpeak = grid.zi[modulation["ntemp"]]  # Position in mm.
+phase_reference = beam.tn1[modulation["ncenter"]]  # Entrance phase in radians.
+```
+
+The dictionary contains `Izmax`, `ntemp`, and `ncenter`. Both indices are
+zero-based: `ntemp` indexes the longitudinal grid, while `ncenter` indexes
+particle columns directly, after mapping through `dynamics.Y`. The selected
+electron provides a reference for centering the trajectory plot. Higher
+harmonics can shift the actual current peak away from the fundamental peak.
+
+#### Space-charge energy exchange and final power balance
+
+MATLAB lines 715-724 are available as two separate diagnostics:
+
+```python
+from diagnostics.space_charge import calculate_space_charge_power
+from diagnostics.power_balance import calculate_power_balance
+
+space_charge_power = calculate_space_charge_power(
+    result.beam_state, result.space_charge_state, grid,
+)
+
+power_balance = calculate_power_balance(
+    result.beam_state, space_charge_power, cavity_power,
+    numerical, beam, grid, reference,
+)
+```
+
+`space_charge_power` contains the longitudinal arrays `effSCDC`, `effSCRF`,
+and their sum `effSC`. These are cumulative power fractions relative to the
+entrance, normalized to `Nbeam * (U0 * 1000) * I0`. The integration uses the
+left endpoint of every interval, as in MATLAB. RF power uses
+`0.5 * real(conj(Iz) * Esz)`, summed over harmonics. Negative contributions
+are retained; this is energy exchange rather than purely dissipative loss.
+
+`power_balance` contains `effend`, `effSCend`, and `effendmodified`. The first
+two are interpolated at `max(grid.zi) - numerical.efficiency_end_offset_mm`.
+The final balance subtracts the space-charge contribution and all cavity
+wall losses from the beam efficiency, then adds net RF input divided by
+reference beam power. It is an efficiency inferred from energy balance,
+distinct from the output-port efficiency `cavity_power["effcavity"]`.
+An observation point outside the grid gives NaN, matching MATLAB `interp1`.
+
+Both functions read the returned states without updating them. They use the
+separate space-charge fields, not the total tracking fields. MATLAB reuses
+`Esz0` for its total DC field; these agree in the supported solver because
+`Emz0` is zero. Future DC cavity support will need explicit power accounting.
+#### Applegate diagram and current harmonics
+
+The first two MATLAB figures (lines 729-773) are available as ordinary plotting
+functions. Both return the figure and axes; the caller can display or save them.
+
+```python
+from plotting.beam import plot_applegate, plot_current_harmonics
+
+modulation = find_peak_modulation(result.beam_state, result.dynamics)
+zmax = grid.zi.max() - numerical.efficiency_end_offset_mm
+fig, axes = plot_applegate(
+    result.dynamics, beam, grid, cavities, cavity_fields,
+    ncenter=modulation["ncenter"], Ntp=100, zmax=zmax,
+)
+fig, ax = plot_current_harmonics(result.beam_state, grid, cavities, zmax=zmax)
+```
+
+The Applegate plot uses full trajectory histories, wraps arrival-phase delay
+into one RF period, and excludes unwritten history entries. `Ntp=None` displays
+all active samples; a positive `Ntp` selects a subset using MATLAB's rounding.
+The second axis displays normalized RF cavity profiles, not the instantaneous
+force field. The current plot shows already-normalized RF harmonic amplitudes
+and cavity-center markers. Neither function modifies the stored data.
+Both use dashed gray grids. See
+[test 8](test/8.ApplegateDiagramTest/README.md) for notebooks and MATLAB comparison.
 
 #### Space-charge and iteration controls:
 | MATLAB parameter  | Meaning                                                                                                                                             |

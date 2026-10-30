@@ -1,5 +1,9 @@
 # Implementation comparison tests
 
+Test 8: [Applegate diagram and current harmonics](8.ApplegateDiagramTest/README.md)
+continues from the independent final Python/MATLAB solutions saved by test 7.
+It provides Python and MATLAB notebooks, plotted-data comparison, and PNGs.
+
 Each test has its own folder, inputs, plots, and results. We review one stage at a time before adding the next. The purpose is to understand each calculation and then check that the Python translation agrees with the independent MATLAB implementation.
 
 ## Organization
